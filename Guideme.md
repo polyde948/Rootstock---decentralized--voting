@@ -1,127 +1,318 @@
-*🗳️ Building a Decentralized Voting Smart Contract on Rootstock*
 
-*Overview*  
-This tutorial walks through building and deploying a simple decentralized voting system using Solidity on Rootstock (RSK). The contract allows users to create polls, vote transparently, and see results — all on-chain with RBTC.
+📄 ROOTSTOCK DECENTRALIZED VOTING — FULL TUTORIAL SUBMISSION
 
-We’ll cover:  
-- Project architecture  
-- Writing the smart contract  
-- Deploying on Rootstock testnet  
-- Testing functionality  
-- How to adapt or expand the system
-
-GitHub Repo: [Add your repo link here]
+🗳️ BUILDING A DECENTRALIZED VOTING SYSTEM ON ROOTSTOCK
+By Nkanyiso Moyo | GitHub: https://github.com/polyde948/Rootstock-Decentralized-Voting
 
 ---
 
-*⚙️ Architecture & Smart Contract Structure*
+## 🚀 Overview & Motivation
 
-The system consists of:
+**What problem does this solve?**
 
-- A *Poll struct* that stores:
-  - The question
-  - Options
-  - Vote count for each option
-  - Whether the poll is active
-  - Creator’s address
-- *Mappings* for polls by ID and for addresses that already voted
-- Access control so only poll creators can close polls
+Centralized voting systems are often opaque, prone to manipulation, and require trust in a central authority. This project introduces a simple yet powerful **decentralized voting smart contract** built on the **Rootstock (RSK)** blockchain, enabling transparent, censorship-resistant voting — without middlemen.
 
-```solidity
-struct Poll {
-    string question;
-    string[] options;
-    mapping(uint => uint) votes;
-    mapping(address => bool) hasVoted;
-    bool isActive;
-    address creator;
+**Who is this for?**
+
+This guide is for:
+- Web3 developers with basic Solidity knowledge
+- DAO builders and governance tool creators
+- Blockchain learners exploring Rootstock
+- Hackathon participants and Ethereum devs interested in Bitcoin sidechains
+
+**Prerequisites:**
+- Node.js (v16+)
+- Truffle Framework
+- Metamask wallet or RSK wallet
+- Familiarity with Solidity and JavaScript
+- Basic understanding of smart contracts and Web3
+
+---
+
+## ⚙️ Architecture & Core Components
+
+### 🧠 How the System Works
+
+Each voting session (poll) is stored as a `struct` in Solidity containing:
+- A **question** (e.g. “Who should be the next DAO leader?”)
+- **Options** (list of candidates)
+- A mapping of **votes per option**
+- A mapping to **prevent double voting**
+- Creator's address and active status
+
+### 📊 Architecture Flow
+
+User 🧑 │ ▼ Create Poll ➡️ Smart Contract 🛠 (on RSK) │ ▼ Voters Cast Votes (1 address = 1 vote) ➡️ Blockchain Storage 🗳 │ ▼ Get Live Results ✔️ or Close Poll 🚫 (Only creator)
+
+There’s no backend — everything is **on-chain** on the **RSK testnet** for transparency and immutability.
+
+---
+
+## 🛠️ Step-by-Step Guide
+
+### ✅ 1. Environment Setup
+
+#### A. Clone the repo
+
+```bash
+git clone https://github.com/polyde948/Rootstock-Decentralized-Voting.git
+cd Rootstock-Decentralized-Voting
+
+B. Install dependencies
+
+npm install
+
+C. Install Truffle globally (if not already)
+
+npm install -g truffle
+
+
+---
+
+🌐 2. Configure for Rootstock Testnet
+
+Open truffle-config.js and add:
+
+const HDWalletProvider = require('@truffle/hdwallet-provider');
+const mnemonic = "YOUR WALLET MNEMONIC HERE";
+
+module.exports = {
+  networks: {
+    rootstock_testnet: {
+      provider: () => new HDWalletProvider(mnemonic, `https://public-node.testnet.rsk.co`),
+      network_id: 31,
+      gas: 2500000,
+      gasPrice: 60000000
+    }
+  },
+  compilers: {
+    solc: {
+      version: "^0.8.0"
+    }
+  }
+};
+
+📌 Replace the mnemonic with your RSK wallet’s seed phrase (testnet wallet).
+
+
+---
+
+🔧 3. Smart Contract Code
+
+Here’s a simplified version of the smart contract (Voting.sol):
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract Voting {
+    struct Poll {
+        string question;
+        string[] options;
+        mapping(uint => uint) votes;
+        mapping(address => bool) hasVoted;
+        bool isActive;
+        address creator;
+    }
+
+    Poll[] public polls;
+
+    function createPoll(string memory _question, string[] memory _options) public {
+        Poll storage newPoll = polls.push();
+        newPoll.question = _question;
+        newPoll.options = _options;
+        newPoll.isActive = true;
+        newPoll.creator = msg.sender;
+    }
+
+    function vote(uint _pollId, uint _optionId) public {
+        Poll storage poll = polls[_pollId];
+        require(poll.isActive, "Poll is closed");
+        require(!poll.hasVoted[msg.sender], "Already voted");
+        poll.votes[_optionId]++;
+        poll.hasVoted[msg.sender] = true;
+    }
+
+    function closePoll(uint _pollId) public {
+        require(polls[_pollId].creator == msg.sender, "Only creator can close");
+        polls[_pollId].isActive = false;
+    }
+
+    function getResults(uint _pollId) public view returns (uint[] memory) {
+        Poll storage poll = polls[_pollId];
+        uint[] memory results = new uint[](poll.options.length);
+        for (uint i = 0; i < poll.options.length; i++) {
+            results[i] = poll.votes[i];
+        }
+        return results;
+    }
+
+    function getPoll(uint _pollId) public view returns (string memory, string[] memory) {
+        Poll storage poll = polls[_pollId];
+        return (poll.question, poll.options);
+    }
 }
-```
+
 
 ---
 
-*🔧 Key Functions Explained*
+🔄 4. Compile & Deploy the Contract
 
-- `createPoll(string memory question, string[] memory options)`  
-  Creates a new poll with multiple options.
+truffle compile
+truffle migrate --network rootstock_testnet
 
-- `vote(uint pollId, uint optionIndex)`  
-  Lets users vote once per poll. Prevents double voting using address tracking.
+If successful, the terminal will output something like:
 
-- `getResults (uint pollId)`  
-  Returns vote counts for each option.
+Deploying 'Voting'
+------------------
+> contract address: 0x123abc...def
+> blocks: 2
+> gas used: 1,234,567
+> Saving migration...
+> Saving artifacts...
 
-- `closePoll(uint pollId)`  
-  Only the creator can close the poll and prevent further votes.
+🎉 Your contract is now live on Rootstock Testnet!
 
-- `getPoll(uint pollId)`  
-  Fetches question and options for UI display.
-
----
-
-*🚀 Deploying to Rootstock Testnet*
-
-1. *Environment Setup*
-   - Install Truffle: `npm install -g truffle`
-   - Create a new Rootstock-compatible project.
-
-2. *Compile Contract*
-   ```bash
-   truffle compile
-   ```
-
-3. *Deploy to Testnet*
-   Configure `truffle-config.js` for Rootstock testnet, then:
-   ```bash
-   truffle migrate --network rootstock_testnet
-   ```
-
-4. *Fund Your Wallet*
-   Use a Rootstock faucet to get RBTC testnet tokens.
 
 ---
 
-*🧪 How to Test the Voting System*
+💻 Usage: Interacting With the Contract
 
-1. *Create a Poll*
-   ```solidity
-   createPoll("Best web3 platform?", ["Rootstock", "Ethereum", "Solana"]);
-   ```
+Use Truffle console:
 
-2. *Vote*
-   ```solidity
-   vote(0, 1); // Votes for Ethereum
-   ```
+truffle console --network rootstock_testnet
 
-3. *Fetch Results*
-   ```solidity
-   getResults(0);
-   ```
+Then interact:
 
-4. *Close Poll*
-   ```solidity
-   closePoll(0);
-   ```
+let instance = await Voting.deployed()
 
----
+// Create a poll
+await instance.createPoll("Best blockchain?", ["Rootstock", "Ethereum", "Solana"])
 
-*📈 Expanding the Project*
+// Vote (e.g., vote for Ethereum = index 1)
+await instance.vote(0, 1)
 
-You can extend the system by adding:
+// Check results
+let res = await instance.getResults(0)
+res.toString()  // e.g., [0,1,0]
 
-- Time-based voting (auto-close after X days)
--- Anonymous voting with zk-proofs
-- Token-gated polls using ERC-20 or NFT ownership
-- UI dashboard with web3.js or Ethers.js integration
+// Close poll
+await instance.closePoll(0)
+
 
 ---
 
-*✅ Conclusion*
+📷 Optional UI (Bonus Step)
 
-This decentralized voting smart contract shows how blockchain can power transparent, censorship-resistant governance. Built on Rootstock with RBTC, it’s a simple but powerful tool any developer can build on or adapt.
+You can build a front-end using React + ethers.js. Sample:
 
-GitHub Repo: [https://github.com/polyde948/Rootstock---decentralized--voting]
+npm install ethers
+
+Then use:
+
+const provider = new ethers.providers.JsonRpcProvider("https://public-node.testnet.rsk.co");
+const contract = new ethers.Contract(contractAddress, abi, provider);
+
 
 ---
 
-!
+🧠 Advanced Features to Add
+
+1. Time-based polls
+
+Add a uint deadline to each poll and auto-close after a time.
+
+
+
+2. Token-gated voting
+
+Require holding a specific token to vote.
+
+
+
+3. Anonymous voting
+
+Use zk-SNARKs or off-chain commitments.
+
+
+
+4. Result visualization
+
+Display bar charts using Chart.js in your React app.
+
+
+
+5. Multi-language support
+
+Add i18n for global reach.
+
+
+
+
+
+---
+
+🧰 Troubleshooting & Tips
+
+Issue	Solution
+
+Gas estimation error	Try reducing gas value in truffle-config.js
+Wallet not funded	Use RSK Faucet
+HDWalletProvider not found	Run npm install @truffle/hdwallet-provider
+Contract not found	Ensure correct network and contract name
+Vote not updating	Ensure you haven’t voted already in that poll
+
+
+
+---
+
+🤝 Contribution Guidelines
+
+We welcome contributors!
+
+1. Fork the repo
+
+
+2. Create a feature branch: git checkout -b feature/add-timers
+
+
+3. Make your changes
+
+
+4. Submit a PR with a clear description
+
+
+
+Follow Solidity Style Guide and test your changes using Truffle.
+
+
+---
+
+📚 References & Resources
+
+GitHub Repo: https://github.com/polyde948/Rootstock-Decentralized-Voting
+
+Rootstock Docs: https://developers.rsk.co
+
+RSK Faucet: https://faucet.testnet.rsk.co/
+
+Truffle Framework: https://trufflesuite.com
+
+Web3 Intro: https://ethereum.org/en/developers/docs/web2-vs-web3/
+
+OpenZeppelin Contracts: https://docs.openzeppelin.com/contracts
+
+
+
+---
+
+✅ Conclusion
+
+By leveraging Rootstock’s secure and low-cost smart contracts, we’ve built a censorship-resistant voting system that is fully decentralized. This project shows how governance tools can operate without trusting any third party — a step toward truly decentralized decision-making.
+
+
+---
+
+Built with 💛 on Bitcoin’s smart contract platform, Rootstock.
+
+Nkanyiso Moyo
+GitHub: https://github.com/polyde948/Rootstock-Decentralized-Voting
